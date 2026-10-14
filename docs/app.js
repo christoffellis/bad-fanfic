@@ -1,4 +1,4 @@
-import { Chain } from "./markov.js";
+import { Chain } from "./markov.js?v=2";
 import { epubToText } from "./epub.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -135,7 +135,7 @@ async function selectSource(value) {
       if (!res.ok) throw new Error(res.statusText);
       next = new Chain(await res.text(), { maxOrder: 5, overlapRun: 12 });
     } else {
-      const res = await fetch(`models/${value.slice("model:".length)}`);
+      const res = await fetch(`models/${value.slice("model:".length)}`, { cache: "no-cache" });
       if (!res.ok) throw new Error(res.statusText);
       next = Chain.fromJSON(await res.json());
     }
@@ -149,7 +149,7 @@ async function selectSource(value) {
 async function loadSources() {
   let models = [];
   try {
-    const res = await fetch("models/index.json");
+    const res = await fetch("models/index.json", { cache: "no-cache" });
     if (res.ok) models = await res.json();
   } catch { /* no prebuilt models: the sample still works */ }
   for (const m of models) addOption(`model:${m.file}`, m.name);

@@ -1,0 +1,33 @@
+# Your books: never commit these
+books/
+*.epub
+*.mobi
+*.azw*
+*.kfx
+
+# Derived data and trained models (can reproduce copyrighted text)
+corpus*.txt
+data/
+models/
+checkpoints/
+runs/
+*.pt
+*.pth
+*.safetensors
+*.bin
+*.ckpt
+*.pkl
+*.json.model
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

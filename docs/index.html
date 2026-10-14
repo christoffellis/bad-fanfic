@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bad Fanfic</title>
+  <meta name="description" content="Drop in an epub and write terrible fanfic with a predictive keyboard. Everything runs in your browser.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Bad Fanfic</h1>
+      <p class="lede">Drop in an epub and the page predicts the next word. You pick. Your books never leave this tab.</p>
+    </header>
+
+    <section class="source" aria-label="Source books">
+      <label class="btn">
+        <input type="file" id="files" accept=".epub,.txt" multiple hidden>
+        Choose epubs or text files
+      </label>
+      <p id="status" role="status" aria-live="polite">Loading the sample…</p>
+    </section>
+
+    <section aria-label="Your chapter">
+      <div id="page" class="manuscript" tabindex="0"
+           aria-label="Your chapter so far"
+           data-empty="Pick a word below to start the chapter."></div>
+    </section>
+
+    <section aria-label="Next word">
+      <div id="keys" class="keys" role="group" aria-label="Suggested next words"></div>
+      <p class="legend">Solid keys are the likeliest next words. Dashed keys are wildcards.</p>
+      <form id="own" class="own" autocomplete="off">
+        <label for="ownword">Your own word</label>
+        <input id="ownword" type="text" maxlength="40">
+        <button type="submit" class="btn small">Add</button>
+      </form>
+    </section>
+
+    <section class="controls" aria-label="Controls">
+      <div class="dial">
+        <label for="order">How much sense</label>
+        <div class="dial-row">
+          <span aria-hidden="true">Chaos</span>
+          <input id="order" type="range" min="1" max="3" step="1" value="2">
+          <span aria-hidden="true">Sense</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="auto" class="btn">Write a sentence</button>
+        <button type="button" id="undo" class="btn ghost">Undo</button>
+        <button type="button" id="copy" class="btn ghost">Copy</button>
+        <button type="button" id="clear" class="btn ghost">Clear</button>
+      </div>
+    </section>
+
+    <details id="neural" class="neural">
+      <summary>Neural mode: continue the page with a small language model</summary>
+      <p>Loads a GPT-2 style model from Hugging Face in your browser with Transformers.js. The first load downloads tens of megabytes, then it is cached. Use any model repo that includes ONNX weights.</p>
+      <div class="neural-grid">
+        <label for="model">Model</label>
+        <input id="model" type="text" value="Xenova/distilgpt2" spellcheck="false">
+        <label for="temp">Temperature</label>
+        <input id="temp" type="number" min="0.1" max="2" step="0.1" value="1.0">
+        <label for="len">Words to add</label>
+        <input id="len" type="number" min="10" max="200" step="10" value="60">
+      </div>
+      <div class="actions">
+        <button type="button" id="load-model" class="btn">Load model</button>
+        <button type="button" id="continue" class="btn" disabled>Continue the page</button>
+      </div>
+      <p id="neural-status" role="status" aria-live="polite"></p>
+    </details>
+
+    <footer>
+      <p>Source, epub extraction and local training scripts: <a href="https://github.com/christoffellis/bad-fanfic">github.com/christoffellis/bad-fanfic</a>. The built-in sample is original text written for this demo.</p>
+    </footer>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Only needed for the neural routes (lstm, gpt2, export).
+# The epub extractor and Markov generator use the standard library only.
+torch>=2.2
+transformers>=4.40
+
+# Only needed for `python -m bad_fanfic export` (browser-ready ONNX)
+optimum[onnxruntime]>=1.20

@@ -3,5 +3,10 @@
     "file": "HP.json",
     "name": "HP",
     "words": 1099772
+  },
+  {
+    "file": "DCC.json",
+    "name": "Dungeon Crawler Carl",
+    "words": 803551
   }
 ]

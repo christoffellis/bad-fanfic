@@ -60,6 +60,27 @@ export class Chain {
     }
   }
 
+  // A prebuilt model from `python -m bad_fanfic markov corpus.txt --export x.json`.
+  // It is pruned, so the verbatim-copy check is unnecessary (and its data isn't shipped).
+  static fromJSON(model) {
+    if (model?.format !== "bad-fanfic-markov" || model.version !== 1) {
+      throw new Error("not a bad-fanfic Markov model");
+    }
+    const chain = new Chain("", { maxOrder: model.maxOrder, overlapRun: 0 });
+    model.tables.forEach((table, i) => {
+      const map = chain.tables[i + 1];
+      for (const [ctx, row] of Object.entries(table)) map.set(ctx, new Map(Object.entries(row)));
+    });
+    for (const [start, count] of Object.entries(model.starts)) {
+      const words = start.split(" ");
+      for (let i = 0; i < count; i++) chain.starts.push(words);
+    }
+    chain._top = model.top.slice();
+    chain.wordCount = model.wordCount;
+    chain.name = model.name;
+    return chain;
+  }
+
   get usable() {
     return this.starts.length > 0;
   }

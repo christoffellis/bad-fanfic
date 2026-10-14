@@ -1,3 +1,4 @@
+import json
 import random
 import subprocess
 import sys
@@ -10,7 +11,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from bad_fanfic.epub_to_text import extract_epub  # noqa: E402
-from bad_fanfic.markov import Chain  # noqa: E402
+from bad_fanfic.markov import Chain, build_model  # noqa: E402
 from epub_fixture import build_epub  # noqa: E402
 
 
@@ -79,6 +80,33 @@ class MarkovTests(unittest.TestCase):
                                      for i in range(len(words) - 5)))
 
 
+class ModelExportTests(unittest.TestCase):
+    TEXT = "The cat sat. The cat ran. The cat sat. The dog sat.\nThe cat sat."
+
+    def test_prunes_rare_transitions(self):
+        model = build_model(self.TEXT, "t", max_order=2, min_count=2)
+        self.assertEqual(model["tables"][0]["the"], {"cat": 4})  # "The dog" (once) is gone
+        self.assertEqual(model["tables"][1]["the cat"], {"sat.": 3})
+        self.assertEqual(model["starts"], {"The cat": 4})
+        self.assertEqual(model["wordCount"], 15)
+
+    def test_unpruned_keeps_everything(self):
+        model = build_model(self.TEXT, "t", max_order=2, min_count=1)
+        self.assertEqual(model["tables"][0]["the"], {"cat": 4, "dog": 1})
+
+    def test_cli_writes_model_and_index(self):
+        tmp = Path(tempfile.mkdtemp())
+        corpus = tmp / "c.txt"
+        corpus.write_text("\n".join([self.TEXT] * 3), encoding="utf-8")
+        r = subprocess.run([sys.executable, "-m", "bad_fanfic", "markov", str(corpus),
+                            "--export", str(tmp / "m" / "cats.json")],
+                           cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        index = json.loads((tmp / "m" / "index.json").read_text(encoding="utf-8"))
+        self.assertEqual(index, [{"file": "cats.json", "name": "Cats", "words": 45}])
+        self.assertEqual(json.loads((tmp / "m" / "cats.json").read_text(encoding="utf-8"))["maxOrder"], 2)
+
+
 class CliTests(unittest.TestCase):
     def test_extract_then_markov(self):
         tmp = Path(tempfile.mkdtemp())
@@ -89,7 +117,7 @@ class CliTests(unittest.TestCase):
         r = run("extract", str(tmp), "-o", str(corpus))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(corpus.exists())
-        r = run("markov", str(corpus), "-n", "3", "--seed", "1")
+        r = run("markov", str(corpus), "-n", "3", "--seed", "1", "--no-save")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertGreaterEqual(len([l for l in r.stdout.splitlines() if l.strip()]), 3)
 

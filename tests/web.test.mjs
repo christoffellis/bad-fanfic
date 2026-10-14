@@ -88,3 +88,26 @@ test("chain: suggestions fill the board and respect context", async () => {
   // unseen context still returns something
   assert.ok(chain.suggestions(["zzqx"], { count: 18 }).length > 0);
 });
+
+test("chain: an unpruned exported model matches the chain built in the browser", async () => {
+  const text = await epubToText(fixture("x.epub", 4));
+  const r = spawnSync("python3", ["-c",
+    "import json,sys; from bad_fanfic.markov import build_model; " +
+    "print(json.dumps(build_model(sys.stdin.read(), 'x', max_order=3, min_count=1)))"],
+    { input: text, encoding: "utf8", cwd: join(here, "..") });
+  assert.equal(r.status, 0, r.stderr);
+  const loaded = Chain.fromJSON(JSON.parse(r.stdout));
+  const built = new Chain(text, { maxOrder: 3 });
+  for (let k = 1; k <= 3; k++) {
+    const sorted = (t) => [...t].map(([c, row]) => [c, [...row].sort()]).sort();
+    assert.deepEqual(sorted(loaded.tables[k]), sorted(built.tables[k]), `order ${k} tables differ`);
+  }
+  assert.deepEqual(loaded.starts.map((s) => s.join(" ")).sort(), built.starts.map((s) => s.join(" ")).sort());
+  assert.equal(loaded.wordCount, built.wordCount);
+  assert.ok(loaded.sentence({ order: 3 }));
+  assert.ok(loaded.suggestions(["The"], { count: 18 }).length > 0);
+});
+
+test("chain: fromJSON rejects other files", () => {
+  assert.throws(() => Chain.fromJSON({ hello: 1 }), /not a bad-fanfic Markov model/);
+});

@@ -18,6 +18,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from bad_fanfic import output
+
 
 class CharLSTM(nn.Module):
     def __init__(self, vocab: int, hidden: int, layers: int, dropout: float):
@@ -133,11 +135,14 @@ def generate(args) -> None:
     model.load_state_dict(ckpt["model"])
     if args.seed is not None:
         torch.manual_seed(args.seed)
+    texts = []
     for i in range(args.count):
-        print(sample(model, chars, device, args.prompt, args.length,
-                     args.temperature, args.top_k))
+        texts.append(sample(model, chars, device, args.prompt, args.length,
+                            args.temperature, args.top_k))
+        print(texts[-1])
         if i < args.count - 1:
             print("\n" + "=" * 40 + "\n")
+    output.save("lstm", texts, args)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -169,6 +174,7 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--count", type=int, default=1)
     g.add_argument("--seed", type=int)
     g.add_argument("--device", default="auto")
+    output.add_args(g)
     g.set_defaults(fn=generate)
 
     args = ap.parse_args(argv)

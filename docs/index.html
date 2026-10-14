@@ -4,82 +4,115 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bad Fanfic</title>
-  <meta name="description" content="Drop in an epub and write terrible fanfic with a predictive keyboard. Everything runs in your browser.">
+  <meta name="description" content="Write terrible fanfic with a predictive keyboard trained on books. Everything runs in your browser.">
+  <meta name="color-scheme" content="light dark">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script>
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
 </head>
 <body>
-  <main>
-    <header>
-      <h1>Bad Fanfic</h1>
-      <p class="lede">Drop in an epub and the page predicts the next word. You pick. Your books never leave this tab.</p>
-    </header>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">B</span>
+      <span>Bad Fanfic</span>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" id="theme" class="icon-btn" aria-label="Toggle dark mode">
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/christoffellis/bad-fanfic" aria-label="Source on GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>
+      </a>
+    </div>
+  </header>
 
-    <section class="source" aria-label="Source books">
-      <label class="btn">
-        <input type="file" id="files" accept=".epub,.txt" multiple hidden>
-        Choose epubs or text files
-      </label>
-      <p id="status" role="status" aria-live="polite">Loading the sample…</p>
-    </section>
+  <main class="layout">
+    <section class="editor" aria-label="Your chapter">
+      <div class="editor-head">
+        <h1 id="doc-title">Untitled chapter</h1>
+        <span id="wordcount" class="meta">0 words</span>
+      </div>
 
-    <section aria-label="Your chapter">
-      <div id="page" class="manuscript" tabindex="0"
-           aria-label="Your chapter so far"
-           data-empty="Pick a word below to start the chapter."></div>
-    </section>
+      <div id="page" class="manuscript" tabindex="0" aria-label="Your chapter so far" aria-live="polite"
+           data-empty="Pick a word below, or press “Write a sentence”, to start your chapter."></div>
 
-    <section aria-label="Next word">
-      <div id="keys" class="keys" role="group" aria-label="Suggested next words"></div>
-      <p class="legend">Solid keys are the likeliest next words. Dashed keys are wildcards.</p>
-      <form id="own" class="own" autocomplete="off">
-        <label for="ownword">Your own word</label>
-        <input id="ownword" type="text" maxlength="40">
-        <button type="submit" class="btn small">Add</button>
-      </form>
-    </section>
-
-    <section class="controls" aria-label="Controls">
-      <div class="dial">
-        <label for="order">How much sense</label>
-        <div class="dial-row">
-          <span aria-hidden="true">Chaos</span>
-          <input id="order" type="range" min="1" max="3" step="1" value="2">
-          <span aria-hidden="true">Sense</span>
+      <div class="composer">
+        <div class="composer-head">
+          <span class="label">Next word</span>
+          <span class="meta hint">Press <kbd>1</kbd>–<kbd>9</kbd> to pick</span>
+        </div>
+        <div id="keys" class="keys" role="group" aria-label="Suggested next words"></div>
+        <div class="composer-row">
+          <form id="own" class="own" autocomplete="off">
+            <label for="ownword" class="visually-hidden">Add your own words</label>
+            <input id="ownword" type="text" maxlength="80" placeholder="Or type your own words and press Enter">
+          </form>
+          <div class="actions">
+            <button type="button" id="auto" class="btn primary">Write a sentence</button>
+            <button type="button" id="undo" class="btn" title="Undo (Ctrl+Z)">Undo</button>
+            <button type="button" id="copy" class="btn">Copy</button>
+            <button type="button" id="clear" class="btn danger-ghost">Clear</button>
+          </div>
         </div>
       </div>
-      <div class="actions">
-        <button type="button" id="auto" class="btn">Write a sentence</button>
-        <button type="button" id="undo" class="btn ghost">Undo</button>
-        <button type="button" id="copy" class="btn ghost">Copy</button>
-        <button type="button" id="clear" class="btn ghost">Clear</button>
-      </div>
     </section>
 
-    <details id="neural" class="neural">
-      <summary>Neural mode: continue the page with a small language model</summary>
-      <p>Loads a GPT-2 style model from Hugging Face in your browser with Transformers.js. The first load downloads tens of megabytes, then it is cached. Use any model repo that includes ONNX weights.</p>
-      <div class="neural-grid">
-        <label for="model">Model</label>
-        <input id="model" type="text" value="Xenova/distilgpt2" spellcheck="false">
-        <label for="temp">Temperature</label>
-        <input id="temp" type="number" min="0.1" max="2" step="0.1" value="1.0">
-        <label for="len">Words to add</label>
-        <input id="len" type="number" min="10" max="200" step="10" value="60">
-      </div>
-      <div class="actions">
-        <button type="button" id="load-model" class="btn">Load model</button>
-        <button type="button" id="continue" class="btn" disabled>Continue the page</button>
-      </div>
-      <p id="neural-status" role="status" aria-live="polite"></p>
-    </details>
+    <aside class="sidebar" aria-label="Settings">
+      <section class="panel">
+        <h2>Source</h2>
+        <label for="source" class="field-label">Write in the style of</label>
+        <select id="source"></select>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="files" accept=".epub,.txt" multiple class="visually-hidden">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+          <span><strong>Use your own books</strong><br><span class="meta">Drop epubs or .txt files, or click to choose. They never leave this tab.</span></span>
+        </label>
+        <p id="status" class="meta status" role="status" aria-live="polite">Loading…</p>
+      </section>
 
-    <footer>
-      <p>Source, epub extraction and local training scripts: <a href="https://github.com/christoffellis/bad-fanfic">github.com/christoffellis/bad-fanfic</a>. The built-in sample is original text written for this demo.</p>
-    </footer>
+      <section class="panel">
+        <h2>Style</h2>
+        <span class="field-label" aria-hidden="true">How much sense</span>
+        <fieldset class="segmented" id="order">
+          <legend class="visually-hidden">How much sense</legend>
+          <label><input type="radio" name="order" value="1"><span>Chaos</span></label>
+          <label><input type="radio" name="order" value="2" checked><span>Balanced</span></label>
+          <label><input type="radio" name="order" value="3"><span>Sensible</span></label>
+        </fieldset>
+        <p class="meta">The board shows the likeliest next words first. Words with a dashed border are wildcards.</p>
+        <p class="meta legend"><span class="swatch picked"></span> words you picked &nbsp; <span class="swatch"></span> machine-written</p>
+      </section>
+
+      <details id="neural" class="panel neural">
+        <summary><h2>Neural mode</h2><span class="meta">Experimental</span></summary>
+        <p class="meta">Continue the page with a small language model from Hugging Face, run in your browser with Transformers.js. The first load downloads tens of megabytes.</p>
+        <label for="model" class="field-label">Model</label>
+        <input id="model" type="text" value="Xenova/distilgpt2" spellcheck="false">
+        <div class="field-pair">
+          <div>
+            <label for="temp" class="field-label">Temperature</label>
+            <input id="temp" type="number" min="0.1" max="2" step="0.1" value="1.0">
+          </div>
+          <div>
+            <label for="len" class="field-label">Words to add</label>
+            <input id="len" type="number" min="10" max="200" step="10" value="60">
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="load-model" class="btn">Load model</button>
+          <button type="button" id="continue" class="btn primary" disabled>Continue the page</button>
+        </div>
+        <p id="neural-status" class="meta status" role="status" aria-live="polite"></p>
+      </details>
+    </aside>
   </main>
+
+  <div class="drop-overlay" aria-hidden="true"><div>Drop your books to use them</div></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>

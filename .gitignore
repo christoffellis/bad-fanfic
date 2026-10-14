@@ -9,6 +9,7 @@ books/
 corpus*.txt
 data/
 models/
+!docs/models/
 checkpoints/
 runs/
 *.pt
@@ -31,3 +32,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Generated text
+output/

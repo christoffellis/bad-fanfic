@@ -19,6 +19,8 @@ from pathlib import Path
 
 import torch
 
+from bad_fanfic import output
+
 
 def pick_device(name: str) -> torch.device:
     if name != "auto":
@@ -90,6 +92,7 @@ def generate(args) -> None:
     if args.seed is not None:
         torch.manual_seed(args.seed)
     prompt = tok(args.prompt, return_tensors="pt").to(device)
+    texts = []
     for i in range(args.count):
         with torch.no_grad():
             out = model.generate(
@@ -101,9 +104,11 @@ def generate(args) -> None:
                 repetition_penalty=args.repetition_penalty,
                 pad_token_id=tok.eos_token_id,
             )
-        print(tok.decode(out[0], skip_special_tokens=True))
+        texts.append(tok.decode(out[0], skip_special_tokens=True))
+        print(texts[-1])
         if i < args.count - 1:
             print("\n" + "=" * 40 + "\n")
+    output.save("gpt2", texts, args)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -136,6 +141,7 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--count", type=int, default=1)
     g.add_argument("--seed", type=int)
     g.add_argument("--device", default="auto")
+    output.add_args(g)
     g.set_defaults(fn=generate)
 
     args = ap.parse_args(argv)

@@ -62,7 +62,9 @@ The page in [`docs/`](docs) is plain HTML and JavaScript, so GitHub Pages serves
 python -m bad_fanfic markov corpus.txt --export docs/models/my-books.json --name "My Books"
 ```
 
-This writes the model and adds it to `docs/models/index.json`, which fills the site's source picker. Commit both files and GitHub Pages serves them. By default the export keeps at most 2 words of context and drops every word transition seen fewer than 3 times (`--max-order`, `--min-count`). That keeps the file small and stops the chain replaying the books: in 2,000 generated sentences, no 8-word stretch matched the source, against 2.2% for an unpruned export. Raising `--max-order` to 3 brings copying back up.
+This writes the model and adds it to `docs/models/index.json`, which fills the site's source picker. Commit both files and GitHub Pages serves them. By default the export keeps at most 2 words of context and drops every word transition seen fewer than 3 times (`--max-order`, `--min-count`). That keeps the file small and stops the chain replaying the books: in 2,000 generated sentences, no 8-word stretch matched the source, against 2.2% for an unpruned export.
+
+The site's **Sensible** setting uses 5 words of context, and it's only available for models exported with `--max-order 5`. More context means more copying, so raise `--min-count` along with it. The shipped models use `--max-order 5` with `--min-count 5` (HP, 0.6% of 8-word stretches copied) and `--min-count 8` (Dungeon Crawler Carl, about 4%, mostly its repeated catchphrases).
 - **Neural mode** loads a model from Hugging Face with [Transformers.js](https://github.com/huggingface/transformers.js). The default is `Xenova/distilgpt2`. To use your own fine-tune, append `?model=YOUR_USER/your-model` to the page URL.
 
 ### Hosting your own model on Hugging Face

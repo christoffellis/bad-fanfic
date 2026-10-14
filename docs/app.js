@@ -7,6 +7,7 @@ const keys = $("#keys");
 const statusEl = $("#status");
 const sourceEl = $("#source");
 const wordcountEl = $("#wordcount");
+const titleEl = $("#doc-title");
 const neuralStatus = $("#neural-status");
 const orderInputs = [...document.querySelectorAll('input[name="order"]')];
 
@@ -64,6 +65,11 @@ function undo() {
 const currentWords = () => tokens.map((t) => t.w);
 const order = () => Number(orderInputs.find((i) => i.checked)?.value || 2);
 
+function newTitle() {
+  if (chain) titleEl.textContent = chain.title();
+}
+titleEl.addEventListener("click", newTitle);
+
 function refreshKeys() {
   if (!chain) { suggestions = []; keys.replaceChildren(); return; }
   suggestions = chain.suggestions(currentWords(), { order: order(), count: 18 });
@@ -94,7 +100,11 @@ function useChain(next, message) {
     input.disabled = Number(input.value) > max;
     input.parentElement.title = input.disabled ? `This model remembers at most ${max} words of context` : "";
   }
-  if (order() > max) orderInputs.find((i) => Number(i.value) === max).checked = true;
+  if (order() > max) {
+    const allowed = orderInputs.filter((i) => !i.disabled);
+    allowed[allowed.length - 1].checked = true;
+  }
+  if (!tokens.length) newTitle();
   statusEl.textContent = message;
   refreshKeys();
 }
@@ -123,7 +133,7 @@ async function selectSource(value) {
     if (value === "sample") {
       const res = await fetch("sample.txt");
       if (!res.ok) throw new Error(res.statusText);
-      next = new Chain(await res.text(), { maxOrder: 3, overlapRun: 12 });
+      next = new Chain(await res.text(), { maxOrder: 5, overlapRun: 12 });
     } else {
       const res = await fetch(`models/${value.slice("model:".length)}`);
       if (!res.ok) throw new Error(res.statusText);
@@ -180,7 +190,7 @@ async function loadFiles(fileList) {
 
   statusEl.textContent = "Building the word chain…";
   await nextFrame();
-  const built = new Chain(texts.join("\n\n"), { maxOrder: 3, overlapRun: 12 });
+  const built = new Chain(texts.join("\n\n"), { maxOrder: 5, overlapRun: 12 });
   if (!built.usable) { statusEl.textContent = "That text is too short to learn from."; return; }
 
   const label = `Your books (${texts.length} file${texts.length > 1 ? "s" : ""})`;
@@ -230,11 +240,13 @@ $("#clear").addEventListener("click", () => {
   history.length = 0;
   render();
   refreshKeys();
+  newTitle();
 });
 
 $("#copy").addEventListener("click", async () => {
-  const text = currentWords().join(" ");
-  if (!text) return;
+  const words = currentWords().join(" ");
+  if (!words) return;
+  const text = `${titleEl.textContent}\n\n${words}`;
   try {
     await navigator.clipboard.writeText(text);
     statusEl.textContent = "Copied your chapter.";

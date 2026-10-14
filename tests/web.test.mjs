@@ -111,3 +111,14 @@ test("chain: an unpruned exported model matches the chain built in the browser",
 test("chain: fromJSON rejects other files", () => {
   assert.throws(() => Chain.fromJSON({ hello: 1 }), /not a bad-fanfic Markov model/);
 });
+
+test("chain: titles come from the source's names and nouns", async () => {
+  const chain = new Chain(await epubToText(fixture("t.epub", 6)));
+  for (let i = 0; i < 20; i++) {
+    const t = chain.title();
+    assert.ok(t && t !== "Untitled chapter", t);
+    const words = t.split(/\W+/).filter(Boolean);
+    assert.equal(new Set(words).size, words.length, `repeated word in "${t}"`);
+  }
+  assert.equal(new Chain("too short").title(), "Untitled chapter");
+});

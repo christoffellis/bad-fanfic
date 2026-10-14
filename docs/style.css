@@ -173,7 +173,20 @@ kbd {
   gap: 12px;
   padding: 20px 28px 0;
 }
-.editor-head h1 { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.editor-head h1 { margin: 0; font-size: 1.125rem; font-weight: 600; min-width: 0; }
+.doc-title {
+  margin: 0 0 0 -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.doc-title:hover { background: var(--surface-2); }
+.doc-title:hover::after { content: " ↻"; color: var(--muted); font-weight: 400; }
 
 .manuscript {
   flex: 1;

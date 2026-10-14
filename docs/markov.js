@@ -3,6 +3,15 @@
 
 const SENTENCE_END = /[.!?]["')\]]*$/;
 
+// Capitalised words that are sentence openers rather than names, and nouns too vague for a title.
+const TITLE_STOP = new Set(("The A An And But Then When What Where Why How Who Which There This That These " +
+  "Those They Them Their His Her She He It Its We You Your Our Not No Yes Well Oh Now So If As At In On Of " +
+  "For With From Into Just Still Even Only Some Any All Every One Two Three After Before While Because Mr Mrs " +
+  "Did Does Don Was Were Had Have Has Are Can Could Would Should Will May Might Must Maybe Okay Sir Please " +
+  "Chapter Professor Uncle Aunt Lord Lady Madam Captain Doctor Miss Mostly Death Dark Yeah Look Good Right " +
+  "same other first last next rest only whole time other back moment others place thing things " +
+  "floor sort kind side middle very most front past world end second third fourth fifth best right left fact rest entire main little small next previous least same").split(" "));
+
 export function fnv1a(str) {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -120,6 +129,55 @@ export class Chain {
       }
     }
     return null;
+  }
+
+  // A fanfic title built from the source's own vocabulary: frequent capitalised
+  // words (mostly names) and the words that most often follow "the" (mostly nouns).
+  title() {
+    if (!this._titleWords) {
+      if (!this._top) {
+        this._top = [...this.unigrams].sort((a, b) => b[1] - a[1]).slice(0, 300).map((e) => e[0]);
+      }
+      // Names: capitalised words that also turn up mid-sentence ("said Harry", "and Ron").
+      const midSentence = new Set();
+      for (const key of ["said", "and", "to", "with", "at", "of", "for", "asked"]) {
+        for (const w of this.tables[1].get(key)?.keys() || []) midSentence.add(w.replace(/[^A-Za-z]+$/, ""));
+      }
+      const names = [...new Set(this._top.map((w) => w.replace(/[^A-Za-z]+$/, "")))]
+        .filter((w) => /^[A-Z][a-z]{2,}$/.test(w) && !TITLE_STOP.has(w) && midSentence.has(w));
+      // Nouns: words that follow "the" and sometimes end a phrase there ("the door."),
+      // which adjectives and numbers rarely do. Singular only, so "A ..." reads right.
+      const total = new Map();
+      const ended = new Set();
+      for (const [token, c] of this.tables[1].get("the") || []) {
+        const m = /^([a-z]{4,})([.,!?;:]?)["')]*$/.exec(token);
+        if (!m || TITLE_STOP.has(m[1]) || /[^s]s$/.test(m[1])) continue;
+        total.set(m[1], (total.get(m[1]) || 0) + c);
+        if (m[2]) ended.add(m[1]);
+      }
+      const nouns = [...total].filter(([w]) => ended.has(w)).sort((a, b) => b[1] - a[1])
+        .slice(0, 150).map(([w]) => w[0].toUpperCase() + w.slice(1));
+      this._titleWords = { names, nouns };
+    }
+    const { names, nouns } = this._titleWords;
+    if (!nouns.length) return "Untitled chapter";
+    const pick = (list) => list[Math.floor(Math.random() * list.length)];
+    const noun = () => pick(nouns);
+    const name = () => (names.length ? pick(names) : noun());
+    const templates = [
+      () => `${name()} and the ${noun()} of ${noun()}`,
+      () => `${name()} and the ${noun()}`,
+      () => `The ${noun()} of ${name()}`,
+      () => `The ${noun()} ${noun()}`,
+      () => `${name()} versus the ${noun()}`,
+      () => `${name()}, ${name()} and the ${noun()}`,
+      () => { const n = noun(); return `${/^[AEIOU]/.test(n) ? "An" : "A"} ${n} for ${name()}`; },
+    ];
+    for (let i = 0; i < 10; i++) {
+      const t = pick(templates)();
+      if (new Set(t.split(/\W+/)).size === t.split(/\W+/).length) return t; // no repeated words
+    }
+    return `The ${noun()}`;
   }
 
   // Predictive keyboard: the words most likely to follow `words`, topped up

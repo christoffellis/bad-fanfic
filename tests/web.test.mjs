@@ -93,7 +93,7 @@ test("chain: an unpruned exported model matches the chain built in the browser",
   const text = await epubToText(fixture("x.epub", 4));
   const r = spawnSync("python3", ["-c",
     "import json,sys; from bad_fanfic.markov import build_model; " +
-    "print(json.dumps(build_model(sys.stdin.read(), 'x', max_order=3, min_count=1)))"],
+    "print(json.dumps(build_model(sys.stdin.read(), 'x', max_order=3, min_count=1, branch_from=0)))"],
     { input: text, encoding: "utf8", cwd: join(here, "..") });
   assert.equal(r.status, 0, r.stderr);
   const loaded = Chain.fromJSON(JSON.parse(r.stdout));

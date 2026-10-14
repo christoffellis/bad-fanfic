@@ -90,6 +90,15 @@ class ModelExportTests(unittest.TestCase):
         self.assertEqual(model["starts"], {"The cat": 4})
         self.assertEqual(model["wordCount"], 15)
 
+    def test_long_contexts_need_a_choice(self):
+        text = "a b c x. a b c y. p q r z. p q r z."
+        model = build_model(text, "t", max_order=3, min_count=1, branch_from=3)
+        self.assertIn("a b c", model["tables"][2])        # two ways on: kept
+        self.assertNotIn("p q r", model["tables"][2])     # only one way on: dropped
+        self.assertIn("q r", model["tables"][1])          # shorter contexts unaffected
+        off = build_model(text, "t", max_order=3, min_count=1, branch_from=0)
+        self.assertIn("p q r", off["tables"][2])
+
     def test_unpruned_keeps_everything(self):
         model = build_model(self.TEXT, "t", max_order=2, min_count=1)
         self.assertEqual(model["tables"][0]["the"], {"cat": 4, "dog": 1})

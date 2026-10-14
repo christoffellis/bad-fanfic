@@ -88,10 +88,12 @@ SENTENCE_END = re.compile(r"""[.!?]["')\]]*$""")
 
 
 def build_model(text: str, name: str, max_order: int = 2, min_count: int = 3,
-                top_words: int = 300) -> dict:
+                branch_from: int = 3, top_words: int = 300) -> dict:
     """The browser chain (docs/markov.js) as JSON, minus anything seen fewer
-    than `min_count` times. Pruning keeps the file small and stops the model
-    from replaying long passages of the source word for word."""
+    than `min_count` times. Contexts of `branch_from` words or more are also
+    dropped unless they still offer at least two next words: a long context
+    with only one way to continue is how a chain replays its source, while one
+    with a choice is what makes output read better. Both keep the file small."""
     tables: list[dict[str, Counter]] = [{} for _ in range(max_order + 1)]
     starts: Counter = Counter()
     unigrams: Counter = Counter()
@@ -113,15 +115,17 @@ def build_model(text: str, name: str, max_order: int = 2, min_count: int = 3,
         return {w: c for w, c in counter.most_common() if c >= min_count}
 
     pruned_tables = []
-    for table in tables[1:]:
+    for k, table in enumerate(tables[1:], 1):
+        need = 2 if branch_from and k >= branch_from else 1
         rows = {ctx: prune(row) for ctx, row in table.items()}
-        pruned_tables.append({ctx: row for ctx, row in sorted(rows.items()) if row})
+        pruned_tables.append({ctx: row for ctx, row in sorted(rows.items()) if len(row) >= need})
     return {
         "format": MODEL_FORMAT,
         "version": 1,
         "name": name,
         "maxOrder": max_order,
         "minCount": min_count,
+        "branchFrom": branch_from,
         "wordCount": word_count,
         "starts": prune(starts),
         "top": [w for w, _ in unigrams.most_common(top_words)],
@@ -166,12 +170,16 @@ def main(argv: list[str] | None = None) -> None:
                     help="drop word transitions seen fewer times than this (default 3)")
     ex.add_argument("--max-order", type=int, default=2,
                     help="longest context in words (default 2)")
+    ex.add_argument("--branch-from", type=int, default=3,
+                    help="contexts this long or longer need 2+ possible next words to be kept "
+                         "(default 3, 0 disables)")
     args = ap.parse_args(argv)
 
     if args.export:
         text = Path(args.corpus).read_text(encoding="utf-8")
         name = args.name or args.export.stem.replace("-", " ").title()
-        export_model(build_model(text, name, args.max_order, args.min_count), args.export)
+        export_model(build_model(text, name, args.max_order, args.min_count, args.branch_from),
+                     args.export)
         return
 
     if args.seed is not None:

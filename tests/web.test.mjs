@@ -124,6 +124,21 @@ test("chain: nonsense keeps a sentence's shape but swaps its sense", async () =>
   assert.equal(new Chain("too short").nonsense(), null);
 });
 
+test("chain: nonsense follows on from the page and keeps its swaps", async () => {
+  const chain = new Chain(await epubToText(fixture("f.epub", 6)), { maxOrder: 5 });
+  // a half-written sentence gets finished, not restarted
+  const rest = chain.nonsense({ edits: 0, context: ["The", "wizard"] });
+  assert.ok(rest && !/^[A-Z]/.test(rest[0]), `restarted: ${rest}`);
+  assert.ok(/[.!?]["')\]]*$/.test(rest.at(-1)));
+  // a name swapped for a thing stays that thing
+  const name = chain._lexicon().names[0];
+  const cast = new Map([[name, "teapot"]]);
+  let page = [];
+  for (let i = 0; i < 15; i++) page.push(...(chain.nonsense({ edits: 0, context: page, cast }) || []));
+  assert.ok(page.length > 0);
+  assert.ok(!page.some((w) => w.replace(/[^A-Za-z]/g, "") === name), `${name} came back: ${page.join(" ")}`);
+});
+
 test("chain: titles come from the source's names and nouns", async () => {
   const chain = new Chain(await epubToText(fixture("t.epub", 6)));
   for (let i = 0; i < 20; i++) {

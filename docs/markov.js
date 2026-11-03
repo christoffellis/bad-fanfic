@@ -220,19 +220,28 @@ export class Chain {
     return out;
   }
 
+  // "Harry" -> "the cauldron" at position i (or `noun`, when the cast already has one for him).
+  _thing(words, i, noun) {
+    const [pre, , suf] = parts(words[i]);
+    const det = i === 0 || SENTENCE_END.test(words[i - 1]) ? "The" : "the";
+    return [...words.slice(0, i), pre + det, noun + suf, ...words.slice(i + 1)];
+  }
+
   // Replace the word at i with one that fits its neighbours but not the sense:
   // a noun the wider context never predicts, or a thing where a name was.
-  _substitute(words, i) {
+  // `cast` (name -> noun) keeps a swapped name swapped for the rest of the chapter.
+  _substitute(words, i, cast) {
     const kind = this._slot(words, i);
     const [pre, core, suf] = parts(words[i]);
     const { nouns } = this._lexicon();
     const used = new Set(words.map((w) => parts(w)?.[1].toLowerCase()));
     if (kind === "name") {
       // "Harry didn't know what to say." -> "The cauldron didn't know what to say."
-      const noun = weightedKey([...nouns].filter(([w]) => !used.has(w)).slice(0, 150));
+      const taken = new Set(cast?.values());
+      const noun = cast?.get(core) || weightedKey([...nouns].filter(([w]) => !used.has(w) && !taken.has(w)).slice(0, 150));
       if (!noun) return null;
-      const det = i === 0 || SENTENCE_END.test(words[i - 1]) ? "The" : "the";
-      return [...words.slice(0, i), pre + det, noun + suf, ...words.slice(i + 1)];
+      cast?.set(core, noun);
+      return this._thing(words, i, noun);
     }
     const left = this.tables[1].get(words[i - 1].toLowerCase());
     const wide = i >= 2 ? this.tables[2].get(words.slice(i - 2, i).join(" ").toLowerCase()) : null;
@@ -254,30 +263,74 @@ export class Chain {
     return out;
   }
 
+  // Carry on from `tail` (the last words on the page) to the end of a sentence.
+  // Returns just the new words, or null if the chain runs dry.
+  _extend(tail, { maxWords = 14, minWords = 4 } = {}) {
+    const words = [];
+    while (words.length < maxWords) {
+      const row = this._row([...tail, ...words], this.maxOrder);
+      if (!row) return null;
+      const entries = [...row];
+      words.push(entries[weightedPick(entries)][0]);
+      if (words.length >= minWords && SENTENCE_END.test(words.at(-1))) return words;
+    }
+    return null;
+  }
+
   // Auto-write, Botnik style: a short, well-formed sentence with its sense knocked
-  // loose by `edits` swaps, like "The wand looked at Harry." Returns words or null.
-  nonsense({ edits = 1, tries = 60 } = {}) {
+  // loose by `edits` swaps, like "The wand looked at Harry." It follows on from
+  // `context` (the words so far, finishing a half-written sentence), and names in
+  // `cast` stay swapped. Returns the new words, or null.
+  nonsense({ edits = 1, context = [], cast = null, tries = 60 } = {}) {
+    const tail = context.slice(-this.maxOrder);
+    const midSentence = tail.length > 0 && !SENTENCE_END.test(tail.at(-1));
+    const lastStart = context.findLastIndex((w, i) => i < context.length - 1 && SENTENCE_END.test(w)) + 1;
+    const lastOpener = midSentence ? null : context[lastStart];
+    // three words in a row already on the page means the chain is going round in circles
+    const recent = new Set();
+    const seen = context.slice(-60).map((w) => w.toLowerCase());
+    for (let i = 0; i + 3 <= seen.length; i++) recent.add(seen.slice(i, i + 3).join(" "));
+    const repeats = (s) => [...tail, ...s].some((_, i, all) =>
+      i >= tail.length - 2 && i + 3 <= all.length && recent.has(all.slice(i, i + 3).join(" ").toLowerCase()));
     const pool = [];
     for (let t = 0; t < tries && pool.length < 18; t++) {
-      const s = this.sentence({ order: this.maxOrder, maxWords: 14, minWords: 4, tries: 5 });
+      // follow on from the page; fall back to a fresh start if that leads nowhere
+      const s = (tail.length && t < tries / 2 ? this._extend(tail, { minWords: midSentence ? 1 : 4 }) : null)
+        || (midSentence ? null : this.sentence({ order: this.maxOrder, maxWords: 14, minWords: 4, tries: 5 }));
       // dialogue fragments make poor templates; so do sentences with nothing to swap
-      if (!s || !/^[A-Z]/.test(s[0]) || QUOTE.test(s.join(" ").replace(/\w['\u2019]\w/g, ""))) continue;
-      if (s.some((_, i) => this._slot(s, i))) pool.push(s);
+      if (!s || (!midSentence && !/^[A-Z]/.test(s[0])) || QUOTE.test(s.join(" ").replace(/\w['\u2019]\w/g, ""))) continue;
+      if (repeats(s)) continue;
+      if (!edits || s.some((_, i) => this._slot(s, i))) pool.push(s);
     }
     if (!pool.length) return null;
     // the best-backed third reads as proper sentences; picking within it keeps variety
-    pool.sort((a, b) => this._support(b) - this._support(a));
-    let words = pick(pool.slice(0, Math.ceil(pool.length / 3)));
-    for (let n = 0; n < edits; n++) {
-      let next = n === 0 && Math.random() < 0.5 ? this._flip(words) : null;
-      if (!next && Math.random() < 0.25) next = this._swap(words);
-      for (const i of shuffle(words.map((_, i) => i).filter((i) => this._slot(words, i)))) {
-        if (next) break;
-        next = this._substitute(words, i);
+    const fresh = pool.filter((s) => s[0] !== lastOpener);
+    const ranked = (fresh.length ? fresh : pool).map((s) => [s, this._support([...tail, ...s])]).sort((a, b) => b[1] - a[1]);
+    let words = pick(ranked.slice(0, Math.ceil(ranked.length / 3)))[0];
+
+    // edits see the tail too, so swaps fit the words they now sit next to
+    const off = tail.length;
+    let full = [...tail, ...words];
+    // whoever was swapped earlier in the chapter stays swapped
+    if (cast?.size) {
+      for (let i = full.length - 1; i >= off; i--) {
+        const noun = this._slot(full, i) === "name" && cast.get(parts(full[i])[1]);
+        if (noun) full = this._thing(full, i, noun);
       }
-      if (next) words = next;
     }
-    return words;
+    for (let n = 0; n < edits; n++) {
+      const own = full.slice(off);
+      // flips and swaps rearrange a whole sentence, so not one we're finishing
+      let next = !midSentence && n === 0 && Math.random() < 0.5 ? this._flip(own) : null;
+      if (!next && !midSentence && Math.random() < 0.25) next = this._swap(own);
+      if (next) next = [...tail, ...next];
+      for (const i of shuffle(full.map((_, i) => i).filter((i) => i >= off && this._slot(full, i)))) {
+        if (next) break;
+        next = this._substitute(full, i, cast);
+      }
+      if (next) full = next;
+    }
+    return full.slice(off);
   }
 
   // The source's main names and concrete nouns, shared by title() and nonsense().
@@ -293,17 +346,17 @@ export class Chain {
       }
       const names = [...new Set(this._top.map((w) => w.replace(/[^A-Za-z]+$/, "")))]
         .filter((w) => /^[A-Z][a-z]{2,}$/.test(w) && !TITLE_STOP.has(w) && midSentence.has(w));
-      // Nouns: words that follow "the" and sometimes end a phrase there ("the door."),
+      // Nouns: words that follow "the" and often end a phrase there ("the door."),
       // which adjectives and numbers rarely do. Singular only, so "A ..." reads right.
       const total = new Map();
-      const ended = new Set();
+      const ended = new Map();
       for (const [token, c] of this.tables[1].get("the") || []) {
         const m = /^([a-z]{4,})([.,!?;:]?)["')]*$/.exec(token);
         if (!m || TITLE_STOP.has(m[1]) || /[^s]s$/.test(m[1]) || /(ing|ly)$/.test(m[1])) continue;
         total.set(m[1], (total.get(m[1]) || 0) + Number(c));
-        if (m[2]) ended.add(m[1]);
+        if (m[2]) ended.set(m[1], (ended.get(m[1]) || 0) + Number(c));
       }
-      const nouns = new Map([...total].filter(([w]) => ended.has(w)).sort((a, b) => b[1] - a[1]).slice(0, 400));
+      const nouns = new Map([...total].filter(([w, c]) => (ended.get(w) || 0) >= c / 4).sort((a, b) => b[1] - a[1]).slice(0, 400));
       this._lex = { names, nameSet: new Set(names), nouns };
     }
     return this._lex;

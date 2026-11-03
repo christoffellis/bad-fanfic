@@ -1,4 +1,4 @@
-import { Chain } from "./markov.js?v=3";
+import { Chain } from "./markov.js?v=4";
 import { epubToText } from "./epub.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -18,6 +18,7 @@ let tokens = []; // { w: string, picked: boolean }
 const history = []; // how many tokens each action added, for undo
 const chains = new Map(); // source value -> Chain, so switching back is instant
 let suggestions = [];
+const cast = new Map(); // names auto-write has swapped for things; they stay swapped all chapter
 
 /* ---------- theme ---------- */
 
@@ -94,6 +95,7 @@ function refreshKeys() {
 /* ---------- sources ---------- */
 
 function useChain(next, message) {
+  if (next !== chain) cast.clear();
   chain = next;
   const max = chain.maxOrder;
   for (const input of orderInputs) {
@@ -229,7 +231,7 @@ $("#auto").addEventListener("click", () => {
   if (!chain) { statusEl.textContent = "Pick a source first."; return; }
   // a proper sentence with its sense knocked loose: Sensible 0 swaps, Balanced 1, Chaos 2
   const edits = { 1: 2, 2: 1 }[order()] ?? 0;
-  const sentence = chain.nonsense({ edits }) || chain.sentence({ order: order() });
+  const sentence = chain.nonsense({ edits, context: currentWords(), cast }) || chain.sentence({ order: order() });
   if (sentence) add(sentence, false);
   else statusEl.textContent = "Couldn't build a sentence from that. Try the Chaos setting.";
 });
@@ -239,6 +241,7 @@ $("#undo").addEventListener("click", undo);
 $("#clear").addEventListener("click", () => {
   if (tokens.length > 40 && !confirm("Clear the whole chapter?")) return;
   tokens = [];
+  cast.clear();
   history.length = 0;
   render();
   refreshKeys();

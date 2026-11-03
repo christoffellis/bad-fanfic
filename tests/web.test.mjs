@@ -112,6 +112,18 @@ test("chain: fromJSON rejects other files", () => {
   assert.throws(() => Chain.fromJSON({ hello: 1 }), /not a bad-fanfic Markov model/);
 });
 
+test("chain: nonsense keeps a sentence's shape but swaps its sense", async () => {
+  const chain = new Chain(await epubToText(fixture("n.epub", 6)), { maxOrder: 5 });
+  for (let i = 0; i < 30; i++) {
+    const s = chain.nonsense({ edits: 1 });
+    assert.ok(s, "no sentence");
+    assert.ok(/^[A-Z]/.test(s[0]), `starts lowercase: ${s.join(" ")}`);
+    assert.ok(/[.!?]["')\]]*$/.test(s.at(-1)), `no ending: ${s.join(" ")}`);
+    assert.doesNotMatch(s.join(" "), /\b(the|a|an) (the|a|an)\b/i);
+  }
+  assert.equal(new Chain("too short").nonsense(), null);
+});
+
 test("chain: titles come from the source's names and nouns", async () => {
   const chain = new Chain(await epubToText(fixture("t.epub", 6)));
   for (let i = 0; i < 20; i++) {

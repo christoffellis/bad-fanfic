@@ -1,4 +1,4 @@
-import { Chain } from "./markov.js?v=2";
+import { Chain } from "./markov.js?v=3";
 import { epubToText } from "./epub.js";
 
 const $ = (sel) => document.querySelector(sel);
@@ -227,7 +227,9 @@ for (const input of orderInputs) input.addEventListener("change", refreshKeys);
 
 $("#auto").addEventListener("click", () => {
   if (!chain) { statusEl.textContent = "Pick a source first."; return; }
-  const sentence = chain.sentence({ order: order() });
+  // a proper sentence with its sense knocked loose: Sensible 0 swaps, Balanced 1, Chaos 2
+  const edits = { 1: 2, 2: 1 }[order()] ?? 0;
+  const sentence = chain.nonsense({ edits }) || chain.sentence({ order: order() });
   if (sentence) add(sentence, false);
   else statusEl.textContent = "Couldn't build a sentence from that. Try the Chaos setting.";
 });

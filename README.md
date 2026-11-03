@@ -57,6 +57,7 @@ The page in [`docs/`](docs) is plain HTML and JavaScript, so GitHub Pages serves
 - The keyboard shows the likeliest next words first (press `1`–`9` to pick), then wildcards with dashed borders. Words you pick are highlighted and auto-written words aren't, so you can see where the human ended and the machine began.
 
 ### Shipping a Markov model with the site
+- **Write a sentence** writes a short, grammatical sentence from the model, then knocks its sense loose: it swaps subject and object ("Harry looked at the wand." becomes "The wand looked at Harry."), puts a thing where a name was, or swaps in a noun that fits the grammar but not the context. Balanced makes one swap, Chaos two, Sensible none.
 
 ```bash
 python -m bad_fanfic markov corpus.txt --export docs/models/my-books.json --name "My Books"

@@ -10,7 +10,29 @@ const TITLE_STOP = new Set(("The A An And But Then When What Where Why How Who W
   "Did Does Don Was Were Had Have Has Are Can Could Would Should Will May Might Must Maybe Okay Sir Please " +
   "Chapter Professor Uncle Aunt Lord Lady Madam Captain Doctor Miss Mostly Death Dark Yeah Look Good Right " +
   "same other first last next rest only whole time other back moment others place thing things " +
-  "floor sort kind side middle very most front past world end second third fourth fifth best right left fact rest entire main little small next previous least same").split(" "));
+  "dark dead living wrong floor sort kind side middle very most front past world end second third fourth fifth best right left fact rest entire main little small next previous least same").split(" "));
+
+// Words nonsense() never swaps out: the grammar it keeps while the sense goes.
+const FUNCTION_WORDS = new Set(("the a an and but or of to in on at for with from into onto by as up down out off " +
+  "over under than then that this these those there here his her its their our your my he she it they we you i me " +
+  "him them us was were is are be been had has have did do does not no so if when while what who which how all very " +
+  "just said asked would could should will can now one some any other each every more most much many few own same " +
+  "such only even still back away again too").split(" "));
+const DETERMINERS = new Set("the a an his her their my your its our this that".split(" "));
+const SUBJECTS = { he: "him", she: "her", they: "them", i: "me", we: "us", it: "it", you: "you" };
+const QUOTE = /["'‘’“”]/;
+
+// A token as [leading punctuation, word, trailing punctuation], or null ("Harry's", "-").
+const parts = (token) => /^([^A-Za-z]*)([A-Za-z][A-Za-z-]*)([^A-Za-z]*)$/.exec(token)?.slice(1) || null;
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+function shuffle(list) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
 
 export function fnv1a(str) {
   let h = 0x811c9dc5;
@@ -31,6 +53,8 @@ function weightedPick(entries) {
   }
   return entries.length - 1;
 }
+
+const weightedKey = (entries) => (entries.length ? entries[weightedPick(entries)][0] : null);
 
 export class Chain {
   // maxOrder: longest context (in words) the tables remember.
@@ -131,14 +155,138 @@ export class Chain {
     return null;
   }
 
-  // A fanfic title built from the source's own vocabulary: frequent capitalised
-  // words (mostly names) and the words that most often follow "the" (mostly nouns).
-  title() {
-    if (!this._titleWords) {
+  // How well the chain backs a sentence: the mean context length that predicted each word.
+  _support(words) {
+    let sum = 0;
+    for (let i = 1; i < words.length; i++) {
+      let k = Math.min(this.maxOrder, i);
+      while (k > 0 && !this.tables[k].get(words.slice(i - k, i).join(" ").toLowerCase())?.has(words[i])) k--;
+      sum += k;
+    }
+    return sum / Math.max(1, words.length - 1);
+  }
+
+  // What can be swapped at position i: "noun" (after a determiner, ending its phrase)
+  // or "name". Null for everything else.
+  _slot(words, i) {
+    const p = parts(words[i]);
+    if (!p || p[1].length < 3 || FUNCTION_WORDS.has(p[1].toLowerCase()) || (p[0] && i > 0)) return null;
+    const prev = i > 0 ? parts(words[i - 1]) : null;
+    const next = i + 1 < words.length ? parts(words[i + 1]) : null;
+    const endsPhrase = p[2] || !next || FUNCTION_WORDS.has(next[1].toLowerCase());
+    if (prev && !prev[2] && DETERMINERS.has(prev[1].toLowerCase()) && this._lexicon().nouns.has(p[1]) && endsPhrase) {
+      return "noun";
+    }
+    if (this._lexicon().nameSet.has(p[1]) && !(prev && DETERMINERS.has(prev[1].toLowerCase()))) return "name";
+    return null;
+  }
+
+  // "Harry looked at the wand." -> "The wand looked at Harry."
+  _flip(words) {
+    const s = parts(words[0]);
+    if (!s || s[0] || s[2]) return null;
+    const object = SUBJECTS[s[1].toLowerCase()] || (this._lexicon().nameSet.has(s[1]) && s[1]);
+    if (!object) return null;
+    const spots = [];
+    for (let j = 3; j < words.length; j++) {
+      // "a bottle of ink" stays put: moving just "bottle" would strand "of ink"
+      if (/^(the|a|an)$/i.test(words[j - 1]) && this._slot(words, j) === "noun"
+        && !/^of$/i.test(words[j + 1] || "")) spots.push(j);
+    }
+    if (!spots.length) return null;
+    const j = pick(spots);
+    const [, noun, suffix] = parts(words[j]);
+    const det = words[j - 1].toLowerCase();
+    return [det[0].toUpperCase() + det.slice(1), noun, ...words.slice(1, j - 1), object + suffix, ...words.slice(j + 1)];
+  }
+
+  // Swap two nouns, or two names, that sit apart: "the end of the lane" -> "the lane of the end".
+  _swap(words) {
+    const pairs = [];
+    for (let i = 0; i < words.length; i++) {
+      const kind = this._slot(words, i);
+      if (kind !== "noun" && kind !== "name") continue;
+      for (let j = i + 3; j < words.length; j++) {
+        if (this._slot(words, j) === kind && parts(words[j])[1] !== parts(words[i])[1]) pairs.push([i, j]);
+      }
+    }
+    if (!pairs.length) return null;
+    const [i, j] = pick(pairs);
+    const [pi, ci, si] = parts(words[i]);
+    const [pj, cj, sj] = parts(words[j]);
+    const out = words.slice();
+    out[i] = pi + cj + si;
+    out[j] = pj + ci + sj;
+    return out;
+  }
+
+  // Replace the word at i with one that fits its neighbours but not the sense:
+  // a noun the wider context never predicts, or a thing where a name was.
+  _substitute(words, i) {
+    const kind = this._slot(words, i);
+    const [pre, core, suf] = parts(words[i]);
+    const { nouns } = this._lexicon();
+    const used = new Set(words.map((w) => parts(w)?.[1].toLowerCase()));
+    if (kind === "name") {
+      // "Harry didn't know what to say." -> "The cauldron didn't know what to say."
+      const noun = weightedKey([...nouns].filter(([w]) => !used.has(w)).slice(0, 150));
+      if (!noun) return null;
+      const det = i === 0 || SENTENCE_END.test(words[i - 1]) ? "The" : "the";
+      return [...words.slice(0, i), pre + det, noun + suf, ...words.slice(i + 1)];
+    }
+    const left = this.tables[1].get(words[i - 1].toLowerCase());
+    const wide = i >= 2 ? this.tables[2].get(words.slice(i - 2, i).join(" ").toLowerCase()) : null;
+    const after = (x) => i + 1 >= words.length || this.tables[1].get(x.toLowerCase())?.has(words[i + 1]);
+    const options = [];
+    for (const [x, c] of left || []) {
+      const p = parts(x);
+      if (!p || p[0] !== pre || p[2] !== suf || used.has(p[1].toLowerCase()) || wide?.has(x) || !after(x)) continue;
+      if (!nouns.has(p[1])) continue;
+      options.push([x, Math.sqrt(Number(c))]);
+    }
+    const x = weightedKey(options);
+    if (!x) return null;
+    const out = words.slice();
+    out[i] = x;
+    if (kind === "noun" && /^an?$/i.test(words[i - 1])) {
+      out[i - 1] = (/^[aeiou]/.test(x) ? "an" : "a").replace("a", words[i - 1][0]);
+    }
+    return out;
+  }
+
+  // Auto-write, Botnik style: a short, well-formed sentence with its sense knocked
+  // loose by `edits` swaps, like "The wand looked at Harry." Returns words or null.
+  nonsense({ edits = 1, tries = 60 } = {}) {
+    const pool = [];
+    for (let t = 0; t < tries && pool.length < 18; t++) {
+      const s = this.sentence({ order: this.maxOrder, maxWords: 14, minWords: 4, tries: 5 });
+      // dialogue fragments make poor templates; so do sentences with nothing to swap
+      if (!s || !/^[A-Z]/.test(s[0]) || QUOTE.test(s.join(" ").replace(/\w['\u2019]\w/g, ""))) continue;
+      if (s.some((_, i) => this._slot(s, i))) pool.push(s);
+    }
+    if (!pool.length) return null;
+    // the best-backed third reads as proper sentences; picking within it keeps variety
+    pool.sort((a, b) => this._support(b) - this._support(a));
+    let words = pick(pool.slice(0, Math.ceil(pool.length / 3)));
+    for (let n = 0; n < edits; n++) {
+      let next = n === 0 && Math.random() < 0.5 ? this._flip(words) : null;
+      if (!next && Math.random() < 0.25) next = this._swap(words);
+      for (const i of shuffle(words.map((_, i) => i).filter((i) => this._slot(words, i)))) {
+        if (next) break;
+        next = this._substitute(words, i);
+      }
+      if (next) words = next;
+    }
+    return words;
+  }
+
+  // The source's main names and concrete nouns, shared by title() and nonsense().
+  _lexicon() {
+    if (!this._lex) {
       if (!this._top) {
         this._top = [...this.unigrams].sort((a, b) => b[1] - a[1]).slice(0, 300).map((e) => e[0]);
       }
-      // Names: capitalised words that also turn up mid-sentence ("said Harry", "and Ron").
+      // Names: frequent capitalised words that also turn up mid-sentence ("said Harry", "and Ron").
       const midSentence = new Set();
       for (const key of ["said", "and", "to", "with", "at", "of", "for", "asked"]) {
         for (const w of this.tables[1].get(key)?.keys() || []) midSentence.add(w.replace(/[^A-Za-z]+$/, ""));
@@ -151,15 +299,21 @@ export class Chain {
       const ended = new Set();
       for (const [token, c] of this.tables[1].get("the") || []) {
         const m = /^([a-z]{4,})([.,!?;:]?)["')]*$/.exec(token);
-        if (!m || TITLE_STOP.has(m[1]) || /[^s]s$/.test(m[1])) continue;
-        total.set(m[1], (total.get(m[1]) || 0) + c);
+        if (!m || TITLE_STOP.has(m[1]) || /[^s]s$/.test(m[1]) || /(ing|ly)$/.test(m[1])) continue;
+        total.set(m[1], (total.get(m[1]) || 0) + Number(c));
         if (m[2]) ended.add(m[1]);
       }
-      const nouns = [...total].filter(([w]) => ended.has(w)).sort((a, b) => b[1] - a[1])
-        .slice(0, 150).map(([w]) => w[0].toUpperCase() + w.slice(1));
-      this._titleWords = { names, nouns };
+      const nouns = new Map([...total].filter(([w]) => ended.has(w)).sort((a, b) => b[1] - a[1]).slice(0, 400));
+      this._lex = { names, nameSet: new Set(names), nouns };
     }
-    const { names, nouns } = this._titleWords;
+    return this._lex;
+  }
+
+  // A fanfic title built from the source's own vocabulary: frequent capitalised
+  // words (mostly names) and the words that most often follow "the" (mostly nouns).
+  title() {
+    const names = this._lexicon().names;
+    const nouns = [...this._lexicon().nouns.keys()].slice(0, 150).map((w) => w[0].toUpperCase() + w.slice(1));
     if (!nouns.length) return "Untitled chapter";
     const pick = (list) => list[Math.floor(Math.random() * list.length)];
     const noun = () => pick(nouns);
